@@ -38,3 +38,5 @@ uploads/
 
 # Ignore application.properties only (not the entire resources folder)
 src/main/resources/application.properties
+diagram.md
+diagramExplain.md
