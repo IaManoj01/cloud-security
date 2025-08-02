@@ -1,6 +1,11 @@
 package com.project.cloud.utils;
 
-import java.io.*;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.io.EOFException;
+import java.io.IOException;
 
 public class HybridCryptoUtil {
 
@@ -8,33 +13,49 @@ public class HybridCryptoUtil {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         DataOutputStream dos = new DataOutputStream(out);
 
-        dos.writeInt(data.ephemeralPublicKey.length);
-        dos.write(data.ephemeralPublicKey);
+        dos.writeInt(data.getEphemeralPublicKey().length);
+        dos.write(data.getEphemeralPublicKey());
 
-        dos.writeInt(data.iv.length);
-        dos.write(data.iv);
+        dos.writeInt(data.getIv().length);
+        dos.write(data.getIv());
 
-        dos.writeInt(data.cipherText.length);
-        dos.write(data.cipherText);
+        dos.writeInt(data.getCipherText().length);
+        dos.write(data.getCipherText());
 
-        dos.close();
         return out.toByteArray();
     }
+
 
     public static HybridEncryptedData unpackHybridData(byte[] packed) throws IOException {
         ByteArrayInputStream in = new ByteArrayInputStream(packed);
         DataInputStream dis = new DataInputStream(in);
 
-        byte[] epk = new byte[dis.readInt()];
-        dis.readFully(epk);
+        try {
+            int ephLen = dis.readInt();
+            // Increase the maximum allowed length to accommodate larger keys
+            // ECC keys can be larger depending on the curve and encoding
+            if (ephLen < 0 || ephLen > 2048) {
+                throw new IOException("Invalid ephemeral key length: " + ephLen);
+            }
 
-        byte[] iv = new byte[dis.readInt()];
-        dis.readFully(iv);
+            byte[] ephemeralPublicKey = new byte[ephLen];
+            dis.readFully(ephemeralPublicKey);
 
-        byte[] cipher = new byte[dis.readInt()];
-        dis.readFully(cipher);
+            int ivLen = dis.readInt();
+            if (ivLen < 0 || ivLen > 64) throw new IOException("Invalid IV length: " + ivLen);
 
-        dis.close();
-        return new HybridEncryptedData(epk, iv, cipher);
+            byte[] iv = new byte[ivLen];
+            dis.readFully(iv);
+
+            int cipherLen = dis.readInt();
+            if (cipherLen < 0 || cipherLen > (10 * 1024 * 1024)) throw new IOException("Invalid cipher length: " + cipherLen);
+
+            byte[] cipherText = new byte[cipherLen];
+            dis.readFully(cipherText);
+
+            return new HybridEncryptedData(ephemeralPublicKey, iv, cipherText);
+        } catch (EOFException e) {
+            throw new IOException("Corrupted or invalid encrypted data format", e);
+        }
     }
 }
